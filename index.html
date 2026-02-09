@@ -252,6 +252,43 @@
             `<span class="text-muted">預約前 24 小時內不可線上操作</span>`}
           </div>
         </div>`;
+    // 當網頁載入完成時執行
+window.onload = () => {
+  // 呼叫後端的 getServices，成功後執行 populateServices
+  google.script.run.withSuccessHandler(populateServices).getServices();
+  
+  // 呼叫後端的 getTherapists，成功後執行 populateTherapists
+  google.script.run.withSuccessHandler(populateTherapists).getTherapists();
+};
+
+// 將服務項目填入下拉選單
+function populateServices(services) {
+  const select = document.getElementById('serviceSelect');
+  select.innerHTML = '<option value="" selected disabled>請選擇項目...</option>'; // 清空載入中字樣
+  
+  services.forEach(s => {
+    let opt = document.createElement('option');
+    opt.value = s.name;
+    opt.text = `${s.name} (${s.duration} 分鐘)`;
+    opt.dataset.duration = s.duration; // 把時長存在 dataset 方便之後計算
+    select.add(opt);
+  });
+}
+
+// 將按摩師填入單選框
+function populateTherapists(staff) {
+  const container = document.getElementById('therapistList');
+  // 保留原本的「不指定」選項，動態增加其他的
+  staff.forEach(person => {
+    const html = `
+      <div class="form-check border p-2 mb-2 rounded">
+        <input class="form-check-input ms-1" type="radio" name="therapist" id="${person.name}" value="${person.name}">
+        <label class="form-check-label ms-2" for="${person.name}">${person.name}</label>
+      </div>`;
+    container.insertAdjacentHTML('beforeend', html);
+  });
+}
+      
     });
     html += '</div>';
     container.innerHTML = html;
