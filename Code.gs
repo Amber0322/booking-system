@@ -30,6 +30,7 @@ function getServices() {
     return [];
   }
 }
+
 function getTherapists() {
   try {
     const ss = SpreadsheetApp.openById("17ja21_3zV74XFxND4Avy52ZwSyMdjBitK33cBpmlLpw");
@@ -80,29 +81,31 @@ function getAvailableSlots(serviceName, targetTherapist, dateStr) {
     let busyBedsCount = 0;
 
     // 檢查每位按摩師在該時段的狀態
-    staffData.forEach(row => {
-      const name = row[0];
-      const calId = row[1];
-      const cal = CalendarApp.getCalendarById(calId);
-      if (!cal) return;
+   // 在 getAvailableSlots 的迴圈內
+  staffData.forEach(row => {
+    const name = row[0];
+    const calId = row[1];
+  
+  // 如果前端有指定人，且目前掃描的人不是該指定人，直接跳過節省效能
+  if (targetTherapist !== "none" && targetTherapist !== name) return;
 
-      const events = cal.getEvents(slotStart, slotEndWithBuffer);
-      
-      // 判定邏輯：
-      // A. 是否有「上班」事件覆蓋整個時段
-      const isWorking = events.some(e => e.getTitle().includes("上班") && e.getStartTime() <= slotStart && e.getEndTime() >= slotEndWithBuffer);
-      
-      // B. 是否有其他「預約」事件衝突
-      const hasBooking = events.some(e => !e.getTitle().includes("上班"));
+    const cal = CalendarApp.getCalendarById(calId);
+    const events = cal.getEvents(slotStart, slotEndWithBuffer);
+  
+  // 檢查是否有包含「上班」字眼的事件，且該事件「完全包覆」了預約時段
+    const workingEvent = events.find(e => e.getTitle().includes("上班") && 
+                                   e.getStartTime() <= slotStart && 
+                                   e.getEndTime() >= slotEndWithBuffer);
+  
+    const hasBooking = events.some(e => !e.getTitle().includes("上班"));
 
-      if (hasBooking) {
-        busyBedsCount++; // 只要該按摩師有預約，就佔用一張床
-      }
+  if (hasBooking) busyBedsCount++;
 
-      if (isWorking && !hasBooking) {
-        availableTherapists.push(name); // 沒預約且在上班的人才是「可選」
-      }
-    });
+  // 只有在「有上班」且「沒被預約」的情況下，才算可用
+  if (workingEvent && !hasBooking) {
+    availableTherapists.push(name);
+  }
+});
 
     // 4. 床位與人頭判定
     // 條件：床位沒滿 (busyBeds < 2) 且 (若是指定人則該人要有空，若不指定則至少一人要有空)
@@ -118,7 +121,7 @@ function getAvailableSlots(serviceName, targetTherapist, dateStr) {
     }
 
     if (canBook) {
-      slots.push(Utilities.formatDate(slotStart, "GMT+8", "HH:mm"));
+      slots.push(Utilities.formatDate(slotStart, "GMT-6", "HH:mm"));
     }
 
     // 移動到下一個時段 (每 30 分鐘一跳)
