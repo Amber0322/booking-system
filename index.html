@@ -4,18 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>按摩預約系統</title>
-  <base target="_top">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background-color: #f8f9fa; font-family: "Microsoft JhengHei", sans-serif; }
+    body { background-color: #f4f7f6; font-family: sans-serif; }
     .step-section { display: none; }
-    .step-section.active { display: block; animation: fadeIn 0.5s; }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .slot-btn { width: 100px; margin: 5px; transition: 0.3s; }
+    .step-section.active { display: block; }
+    .slot-btn { width: 100px; margin: 5px; }
     .slot-btn.selected { background-color: #0d6efd !important; color: white !important; }
-    #loadingSpinner { display: none; }
-    .card { border-radius: 15px; border: none; }
-    .btn-next { padding: 10px 30px; }
+    .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
   </style>
 </head>
 <body>
@@ -23,240 +19,277 @@
 <div class="container py-5">
   <div class="row justify-content-center">
     <div class="col-md-8 col-lg-6">
-      <div class="card shadow-lg">
-        <div class="card-body p-4">
-          <h2 class="text-center mb-4">舒壓按摩預約</h2>
-          
-          <div class="d-flex justify-content-center mb-4">
-            <div class="btn-group" role="group">
-              <input type="radio" class="btn-check" name="mainAction" id="actionNew" value="new" checked onchange="toggleMainMode()">
-              <label class="btn btn-outline-primary" for="actionNew">新增預約</label>
-              <input type="radio" class="btn-check" name="mainAction" id="actionManage" value="manage" onchange="toggleMainMode()">
-              <label class="btn btn-outline-primary" for="actionManage">修改/取消預約</label>
-            </div>
-          </div>
+      <div class="card p-4">
+        <h3 class="text-center mb-4">預約管理系統</h3>
 
-          <form id="bookingForm">
-            <div id="step1" class="step-section active">
-              <label class="form-label fw-bold">1. 選擇服務項目</label>
-              <select class="form-select form-select-lg mb-3" id="serviceSelect" onchange="updateDuration()">
-                <option value="" selected disabled>請選擇項目...</option>
-                </select>
-              <div class="d-grid"><button type="button" class="btn btn-primary btn-next" onclick="nextStep(2)">下一步</button></div>
-            </div>
-
-            <div id="step2" class="step-section">
-              <label class="form-label fw-bold">2. 選擇按摩師</label>
-              <div id="therapistList" class="mb-3">
-                <div class="form-check border p-2 mb-2 rounded">
-                  <input class="form-check-input ms-1" type="radio" name="therapist" id="t0" value="none" checked>
-                  <label class="form-check-label ms-2" for="t0">不指定 (系統自動分配)</label>
-                </div>
-                </div>
-              <div class="d-flex justify-content-between">
-                <button type="button" class="btn btn-light" onclick="nextStep(1)">上一步</button>
-                <button type="button" class="btn btn-primary btn-next" onclick="nextStep(3)">下一步</button>
-              </div>
-            </div>
-
-            <div id="step3" class="step-section">
-              <label class="form-label fw-bold">3. 選擇預約日期</label>
-              <input type="date" class="form-control mb-3" id="datePicker" onchange="loadAvailableSlots()">
-              
-              <label class="form-label fw-bold mt-2">4. 選擇預約時間</label>
-              <div id="loadingSpinner" class="text-center my-3">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="small text-muted">正在計算可用床位與時段...</p>
-              </div>
-              <div id="slotContainer" class="d-flex flex-wrap justify-content-center border p-3 rounded bg-white" style="min-height: 100px;">
-                <span class="text-muted">請先選擇日期</span>
-              </div>
-              
-              <input type="hidden" id="selectedTimeValue">
-              
-              <div class="d-flex justify-content-between mt-4">
-                <button type="button" class="btn btn-light" onclick="nextStep(2)">上一步</button>
-                <button type="button" class="btn btn-primary btn-next" id="btnToStep5" disabled onclick="nextStep(5)">下一步</button>
-              </div>
-            </div>
-
-            <div id="step5" class="step-section">
-              <label class="form-label fw-bold">5. 填寫聯絡資料</label>
-              <div class="mb-3"><input type="text" id="userName" class="form-control" placeholder="客人姓名" required></div>
-              <div class="mb-3"><input type="tel" id="userPhone" class="form-control" placeholder="電話號碼" required></div>
-              <div class="mb-3"><input type="email" id="userEmail" class="form-control" placeholder="Email" required></div>
-              <div class="mb-3"><textarea id="userNote" class="form-control" placeholder="備註需求 (選填)"></textarea></div>
-              
-              <div class="alert alert-info small" id="summaryInfo"></div>
-
-              <div class="d-flex justify-content-between">
-                <button type="button" class="btn btn-light" onclick="nextStep(3)">上一步</button>
-                <button type="submit" class="btn btn-success btn-next" id="submitBtn">確認提交預約</button>
-              </div>
-            </div>
-          </form>
-
-          <div id="manageSection" class="step-section">
-            <label class="form-label fw-bold">查詢預約資料</label>
-            <div class="input-group mb-3">
-              <input type="tel" id="searchPhone" class="form-control" placeholder="輸入預約時的電話">
-              <button class="btn btn-primary" onclick="searchBookings()">搜尋</button>
-            </div>
-            <div id="searchResult"></div>
-          </div>
-
+        <div class="btn-group w-100 mb-4">
+          <input type="radio" class="btn-check" name="actionType" id="typeNew" value="new" checked onchange="handleModeToggle()">
+          <label class="btn btn-outline-primary" for="typeNew">新增預約</label>
+          <input type="radio" class="btn-check" name="actionType" id="typeEdit" value="edit" onchange="handleModeToggle()">
+          <label class="btn btn-outline-primary" for="typeEdit">修改/取消</label>
         </div>
+
+        <form id="bookingForm">
+          <div id="step1" class="step-section active">
+            <h5>Step 1: 選擇服務項目</h5>
+            <select class="form-select mb-3" id="serviceSelect" required onchange="resetTimeSlots()"></select>
+            <div class="d-grid"><button type="button" class="btn btn-primary" onclick="goToStep(2)">下一步</button></div>
+          </div>
+
+          <div id="step2" class="step-section">
+            <h5>Step 2: 指定按摩師</h5>
+            <div id="therapistSelect" class="list-group mb-3">
+              <label class="list-group-item"><input class="form-check-input" type="radio" name="therapist" value="none" checked onchange="resetTimeSlots()"> 不指定</label>
+            </div>
+            <div class="d-flex justify-content-between">
+              <button type="button" class="btn btn-light" onclick="goToStep(1)">上一步</button>
+              <button type="button" class="btn btn-primary" onclick="goToStep(3)">下一步</button>
+            </div>
+          </div>
+
+          <div id="step3" class="step-section">
+            <h5>Step 3: 選擇時間</h5>
+            <input type="date" class="form-control mb-3" id="datePicker" onchange="fetchSlots()">
+            <div id="slotContainer" class="d-flex flex-wrap justify-content-center border p-2 mb-3" style="min-height:50px;"></div>
+            <input type="hidden" id="selectedTime">
+            <div class="d-flex justify-content-between">
+              <button type="button" class="btn btn-light" onclick="goToStep(2)">上一步</button>
+              <button type="button" class="btn btn-primary" id="toStep5Btn" disabled onclick="goToStep(5)">最後一步</button>
+            </div>
+          </div>
+
+          <div id="step5" class="step-section">
+            <h5>Step 4: 填寫資料</h5>
+            <input type="text" id="userName" class="form-control mb-2" placeholder="姓名" required>
+            <input type="tel" id="userPhone" class="form-control mb-2" placeholder="電話" required>
+            <input type="email" id="userEmail" class="form-control mb-2" placeholder="Email" required>
+            <div id="verifyGroup" class="mb-3">
+              <div class="input-group">
+                <input type="text" id="verifyCode" class="form-control" placeholder="6 位驗證碼">
+                <button class="btn btn-outline-secondary" type="button" id="sendCodeBtn" onclick="handleSendCode()">取得驗證碼</button>
+              </div>
+            </div>
+            <textarea id="userNote" class="form-control mb-3" placeholder="備註"></textarea>
+            <div class="d-flex justify-content-between">
+              <button type="button" class="btn btn-light" onclick="goToStep(3)">上一步</button>
+              <button type="submit" class="btn btn-success" id="submitBtn">確認提交</button>
+            </div>
+          </div>
+        </form>
+
+        <div id="editSection" class="step-section">
+          <h5>修改/取消預約</h5>
+          <div id="editSearchArea">
+            <div class="input-group mb-3">
+              <input type="tel" id="searchPhone" class="form-control" placeholder="輸入預約電話">
+              <button class="btn btn-primary" onclick="handleSearch()">搜尋</button>
+            </div>
+            <div id="editMsg" class="text-danger small text-center"></div>
+          </div>
+          <div id="editVerifyArea" style="display:none;">
+            <p class="small">驗證碼寄至：<span id="displayMaskedEmail"></span></p>
+            <div class="input-group mb-3">
+              <input type="text" id="editVerifyCode" class="form-control" placeholder="驗證碼">
+              <button class="btn btn-outline-secondary" onclick="sendEditCode()">取得驗證碼</button>
+            </div>
+            <button class="btn btn-success w-100" onclick="verifyEditCode()">驗證身分</button>
+          </div>
+          <div id="editListArea" class="mt-3" style="display:none;">
+            <div id="bookingListContainer" class="list-group"></div>
+          </div>
+          <div id="editActionButtons" class="mt-3" style="display:none;">
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary" onclick="handleModeSelection('modify')">修改預約</button>
+              <button class="btn btn-outline-danger" onclick="handleModeSelection('cancel')">取消預約</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 </div>
 
+<div class="modal fade" id="alertModal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-body text-center py-4">
+        <p id="alertMsg" class="mb-4 fw-bold text-secondary"></p>
+        <button type="button" class="btn btn-primary btn-sm px-4" data-bs-dismiss="modal">確定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // 初始化載入服務與按摩師
+  let isEditMode = false, currentBookingData = null, selectedBooking = null;
+
   window.onload = () => {
-    google.script.run.withSuccessHandler(populateServices).getServices();
-    google.script.run.withSuccessHandler(populateTherapists).getTherapists();
-    
-    // 設定日期選擇器最小值為今天
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('datePicker').setAttribute('min', today);
+    google.script.run.withSuccessHandler(data => {
+      const select = document.getElementById('serviceSelect');
+      select.innerHTML = '<option value="" disabled selected>選擇項目...</option>';
+      data.forEach(item => select.add(new Option(item.name, item.name)));
+    }).getServices();
+    google.script.run.withSuccessHandler(staff => {
+      const container = document.getElementById('therapistSelect');
+      staff.forEach(p => container.insertAdjacentHTML('beforeend', `<label class="list-group-item"><input class="form-check-input" type="radio" name="therapist" value="${p.name}" onchange="resetTimeSlots()"> ${p.name}</label>`));
+    }).getTherapists();
   };
 
-  function nextStep(step) {
-    document.querySelectorAll('.step-section').forEach(s => s.classList.remove('active'));
-    document.getElementById('step' + step).classList.add('active');
-    if(step === 5) updateSummary();
+  function handleModeToggle() {
+    const isEdit = document.getElementById('typeEdit').checked;
+    document.getElementById('bookingForm').style.display = isEdit ? 'none' : 'block';
+    document.getElementById('editSection').classList.toggle('active', isEdit);
+    if (!isEdit) { isEditMode = false; goToStep(1); }
   }
 
-  function toggleMainMode() {
-    const isManage = document.getElementById('actionManage').checked;
-    document.getElementById('bookingForm').style.display = isManage ? 'none' : 'block';
-    document.getElementById('manageSection').classList.toggle('active', isManage);
-    if(!isManage) nextStep(1);
-  }
-
-  function populateServices(services) {
-    const select = document.getElementById('serviceSelect');
-    services.forEach(s => {
-      let opt = new Option(`${s.name} (${s.duration}分鐘)`, s.name);
-      opt.dataset.duration = s.duration;
-      select.add(opt);
+// 統一電話輸入行為：只允許 10 位數字，不准輸入橫線
+const phoneInputs = ['userPhone', 'searchPhone'];
+phoneInputs.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', e => {
+      // 只保留數字，且限制長度為 10
+      e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
     });
   }
+});
 
-  function populateTherapists(staff) {
-    const container = document.getElementById('therapistList');
-    staff.forEach(person => {
-      const html = `
-        <div class="form-check border p-2 mb-2 rounded">
-          <input class="form-check-input ms-1" type="radio" name="therapist" id="${person.name}" value="${person.name}">
-          <label class="form-check-label ms-2" for="${person.name}">${person.name}</label>
-        </div>`;
-      container.insertAdjacentHTML('beforeend', html);
-    });
+// 修改搜尋函式，強制要求 10 碼
+function handleSearch() {
+  const phone = document.getElementById('searchPhone').value;
+  if (phone.length !== 10) {
+    showCustomAlert("請輸入完整的 10 位電話號碼 (例如: 2041234567)。");
+    return;
+  }
+  // 搜尋邏輯繼續...
+  google.script.run.withSuccessHandler(res => {
+    /* ... */
+  }).searchBookingForEdit(phone);
+}
+
+  document.getElementById('editMsg').innerText = "搜尋預約中...";
+  
+  google.script.run
+    .withSuccessHandler(res => {
+      document.getElementById('editMsg').innerText = "";
+      // --- 安全檢查開始 ---
+      if (!res) {
+        showCustomAlert("查無預約，請確認電話是否正確。");
+        return;
+      }
+      // --- 安全檢查結束 ---
+
+      if (res.success) {
+        currentBookingData = res;
+        document.getElementById('editSearchArea').style.display = 'none';
+        document.getElementById('editVerifyArea').style.display = 'block';
+        document.getElementById('displayMaskedEmail').innerText = res.maskedEmail;
+      } else {
+        showCustomAlert(res.msg);
+      }
+    })
+    .withFailureHandler(err => {
+      // 這是捕捉後端致命錯誤（如連線失敗）的關鍵
+      document.getElementById('editMsg').innerText = "";
+      showCustomAlert("系統連線失敗，請致電工作室：" + err.message);
+    })
+    .searchBookingForEdit(rawDigits);
+}
+
+  function verifyEditCode() {
+    const code = document.getElementById('editVerifyCode').value;
+    google.script.run.withSuccessHandler(isValid => {
+      if (isValid) {
+        document.getElementById('editVerifyArea').style.display = 'none';
+        const container = document.getElementById('bookingListContainer');
+        container.innerHTML = '';
+        currentBookingData.bookings.forEach(b => {
+          const btn = document.createElement('button');
+          btn.className = 'list-group-item list-group-item-action';
+          btn.innerHTML = `<b>${b.service}</b> - ${b.date} ${b.time}`;
+          btn.onclick = () => { selectedBooking = b; document.getElementById('editListArea').style.display = 'none'; document.getElementById('editActionButtons').style.display = 'block'; };
+          container.appendChild(btn);
+        });
+        document.getElementById('editListArea').style.display = 'block';
+      } else showCustomAlert("驗證碼錯誤。");
+    }).verifyCodeServerSide(currentBookingData.fullEmail, code);
   }
 
-  function loadAvailableSlots() {
-    const service = document.getElementById('serviceSelect').value;
-    const therapist = document.querySelector('input[name="therapist"]:checked').value;
-    const date = document.getElementById('datePicker').value;
-    
-    if (!service || !date) return;
-
-    document.getElementById('loadingSpinner').style.display = 'block';
-    document.getElementById('slotContainer').innerHTML = '';
-    document.getElementById('btnToStep5').disabled = true;
-
-    google.script.run.withSuccessHandler(renderSlots).getAvailableSlots(service, therapist, date);
+  function handleModeSelection(mode) {
+    if (mode === 'cancel') return showCustomAlert("請致電工作室取消。");
+    if (selectedBooking.editCount >= 1) return showCustomAlert("已修改過，請致電處理。");
+    isEditMode = true;
+    document.getElementById('editSection').classList.remove('active');
+    document.getElementById('bookingForm').style.display = 'block';
+    document.getElementById('serviceSelect').value = selectedBooking.service;
+    document.getElementById('userName').value = selectedBooking.name;
+    document.getElementById('userPhone').value = selectedBooking.phone;
+    document.getElementById('userEmail').value = selectedBooking.email;
+    document.getElementById('verifyGroup').style.display = 'none';
+    goToStep(1);
+    showCustomAlert("身分驗證成功，請重新選時段。");
   }
 
-  function renderSlots(slots) {
-    document.getElementById('loadingSpinner').style.display = 'none';
-    const container = document.getElementById('slotContainer');
-    
-    if (!slots || slots.length === 0) {
-      container.innerHTML = '<span class="text-danger">此日期已無足夠床位或按摩師，請重選。</span>';
-      return;
-    }
-
-    slots.forEach(time => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-outline-primary slot-btn';
-      btn.innerText = time;
-      btn.onclick = function() {
-        document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
-        this.classList.add('selected');
-        document.getElementById('selectedTimeValue').value = time;
-        document.getElementById('btnToStep5').disabled = false;
-      };
-      container.appendChild(btn);
-    });
-  }
-
-  function updateSummary() {
-    const service = document.getElementById('serviceSelect').value;
-    const date = document.getElementById('datePicker').value;
-    const time = document.getElementById('selectedTimeValue').value;
-    const therapist = document.querySelector('input[name="therapist"]:checked').value;
-    document.getElementById('summaryInfo').innerText = `預約總覽：${date} ${time} - ${service} (${therapist === 'none' ? '不指定' : therapist})`;
-  }
-
-  // 提交預約
   document.getElementById('bookingForm').onsubmit = function(e) {
     e.preventDefault();
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.innerText = '處理中...';
+    const btn = document.getElementById('submitBtn'); btn.disabled = true;
+    const email = document.getElementById('userEmail').value;
+    const code = document.getElementById('verifyCode').value;
 
-    const formData = {
+    if (!isEditMode) {
+      google.script.run.withSuccessHandler(isValid => {
+        if (isValid) finalSubmit();
+        else { showCustomAlert("驗證碼錯誤。"); btn.disabled = false; }
+      }).verifyCodeServerSide(email, code);
+    } else finalSubmit();
+  };
+
+  function finalSubmit() {
+    const payload = {
       service: document.getElementById('serviceSelect').value,
       therapist: document.querySelector('input[name="therapist"]:checked').value,
       date: document.getElementById('datePicker').value,
-      time: document.getElementById('selectedTimeValue').value,
+      time: document.getElementById('selectedTime').value,
       name: document.getElementById('userName').value,
       phone: document.getElementById('userPhone').value,
       email: document.getElementById('userEmail').value,
-      note: document.getElementById('userNote').value
+      isEdit: isEditMode,
+      bookingId: isEditMode ? selectedBooking.bookingId : null
     };
-
-    google.script.run
-      .withSuccessHandler(res => {
-        alert(res.message);
-        location.reload();
-      })
-      .processBooking(formData);
-  };
-
-  // 搜尋預約 (修改/取消)
-  function searchBookings() {
-    const phone = document.getElementById('searchPhone').value;
-    google.script.run.withSuccessHandler(renderSearchResults).getBookingByPhone(phone);
+    google.script.run.withSuccessHandler(() => alert("成功！")).updateBooking(payload); // 簡化回傳
   }
+  
+function showCustomAlert(message) {
+  const modalEl = document.getElementById('alertModal');
+  document.getElementById('alertMsg').innerText = message;
 
-  function renderSearchResults(results) {
-    const container = document.getElementById('searchResult');
-    if (results.length === 0) {
-      container.innerHTML = '<p class="text-danger mt-3">查無未來預約紀錄</p>';
-      return;
-    }
-    // 這邊可擴充渲染列表與取消按鈕邏輯
-    let html = '<div class="list-group mt-3">';
-    results.forEach(b => {
-      html += `
-        <div class="list-group-item">
-          <h6>${b.date} ${b.time} - ${b.service}</h6>
-          <small>狀態: ${b.status}</small>
-          <div class="mt-2">${b.canModify ? 
-            `<button class="btn btn-sm btn-danger" onclick="cancelBooking('${b.id}')">取消預約</button>` : 
-            `<span class="text-muted">預約前 24 小時內不可線上操作</span>`}
-          </div>
-        </div>`;
-    });
-    html += '</div>';
-    container.innerHTML = html;
+  // 1. 取得或建立實例
+  const myModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  
+  // 2. 顯示
+  myModal.show();
+}
+
+  function goToStep(s) { document.querySelectorAll('.step-section').forEach(x => x.classList.remove('active')); document.getElementById('step' + s).classList.add('active'); }
+  function resetTimeSlots() { document.getElementById('slotContainer').innerHTML = '重新選擇日期'; document.getElementById('toStep5Btn').disabled = true; }
+  function sendEditCode() { google.script.run.sendVerificationCode(currentBookingData.fullEmail, currentBookingData.name); showCustomAlert("已寄出"); }
+  function handleSendCode() { google.script.run.sendVerificationCode(document.getElementById('userEmail').value, document.getElementById('userName').value); }
+  function fetchSlots() {
+    google.script.run.withSuccessHandler(slots => {
+      const c = document.getElementById('slotContainer'); c.innerHTML = '';
+      slots.forEach(t => {
+        const b = document.createElement('button'); b.className = 'btn btn-outline-primary slot-btn'; b.innerText = t;
+        b.onclick = () => { document.querySelectorAll('.slot-btn').forEach(x => x.classList.remove('selected')); b.classList.add('selected'); document.getElementById('selectedTime').value = t; document.getElementById('toStep5Btn').disabled = false; };
+        c.appendChild(b);
+      });
+    }).getAvailableSlots();
   }
+  document.getElementById('userPhone').addEventListener('input', e => {
+    let x = e.target.value.replace(/\D/g, '').match(/(\d{0,3})(\d{0,3})(\d{0,4})/);
+    e.target.value = !x[2] ? x[1] : x[1] + '-' + x[2] + (x[3] ? '-' + x[3] : '');
+  });
 </script>
-
 </body>
 </html>
