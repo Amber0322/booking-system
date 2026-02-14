@@ -1,193 +1,286 @@
+// @ts-nocheck
+/**
+ * 按摩預約系統 - 後端核心邏輯 (Code.gs)
+ * 適用地區：加拿大 溫尼伯 (Winnipeg)
+ */
+
+// --- 全域設定 ---
+const SS_ID = "17ja21_3zV74XFxND4Avy52ZwSyMdjBitK33cBpmlLpw"; // 您的試算表 ID
+
 function doGet() {
-  // 必須使用 createTemplateFromFile 才能解析 HTML 內的腳本
-  var template = HtmlService.createTemplateFromFile('Index');
-  
+  const template = HtmlService.createTemplateFromFile('Index');
   return template.evaluate()
       .setTitle('按摩預約系統')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// 測試用：在 GAS 編輯器選取此函式執行，看 log 是否有資料
-function testConnection() {
-  console.log("Services:", getServices());
-  console.log("Staff:", getTherapists());
-}
-// 修改後的 Code.gs 片段
+/**
+ * 1. 基礎資料讀取
+ */
+// 基礎資料讀取
 function getServices() {
-  try {
-    // 請替換為你試算表網址中的那串長 ID
-    const ss = SpreadsheetApp.openById("17ja21_3zV74XFxND4Avy52ZwSyMdjBitK33cBpmlLpw"); 
-    const sheet = ss.getSheetByName("Services");
-    const data = sheet.getDataRange().getValues();
-    
-    // 轉換為物件陣列並過濾標題列與空行
-    return data.slice(1).filter(row => row[0]).map(row => {
-      return { name: row[0].toString(), duration: row[1] };
-    });
-  } catch (e) {
-    console.error("getServices Error: " + e.message);
-    return [];
-  }
+  const data = SpreadsheetApp.openById(SS_ID).getSheetByName("Services").getDataRange().getValues();
+  return data.slice(1).filter(row => row[0]).map(row => ({ name: row[0].toString(), duration: row[1] }));
 }
 
 function getTherapists() {
-  try {
-    const ss = SpreadsheetApp.openById("17ja21_3zV74XFxND4Avy52ZwSyMdjBitK33cBpmlLpw");
-    const sheet = ss.getSheetByName("Staff");
-    const data = sheet.getDataRange().getValues();
-    return data.slice(1).filter(row => row[0]).map(row => {
-      return { name: row[0].toString() };
-    });
-  } catch (e) {
-    return [];
-  }
+  const data = SpreadsheetApp.openById(SS_ID).getSheetByName("Staff").getDataRange().getValues();
+  return data.slice(1).filter(row => row[0]).map(row => ({ name: row[0].toString() }));
 }
-// 先給予一個空殼，防止前端 fetchSlots 報錯 -> 更新成真正的3人2床計算
+
 /**
- * 取得特定日期、項目、按摩師的可預約時段
+ * 2. 核心：3人2床時段計算引擎
  */
 function getAvailableSlots(serviceName, targetTherapist, dateStr) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const serviceSheet = ss.getSheetByName("Services");
-  const staffSheet = ss.getSheetByName("Staff");
-  const settingsSheet = ss.getSheetByName("Settings");
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const settings = ss.getSheetByName("Settings").getDataRange().getValues()[1];
+  const startTimeStr = settings[0]; // A2
+  const endTimeStr   = settings[1]; // B2
+  const maxBeds      = settings[2]; // C2: 2
+  const buffer       = settings[3]; // D2: 20
 
-  // 1. 取得服務時長與緩衝時間
-  const services = serviceSheet.getDataRange().getValues();
-  const service = services.find(r => r[0] === serviceName);
-  const duration = service ? parseInt(service[1]) : 60; // 預設 60 分鐘
-  const buffer = 20; // 討論確定的 20 分鐘緩衝
+  const service = ss.getSheetByName("Services").getDataRange().getValues().find(r => r[0] === serviceName);
+  const duration = service ? parseInt(service[1]) : 60;
   const totalNeedMinutes = duration + buffer;
 
-  // 2. 取得所有按摩師資訊與總床位限制
-  const staffData = staffSheet.getDataRange().getValues().slice(1);
-  const maxBeds = 2; // 你設定的 2 張床限制
+  const staffData = ss.getSheetByName("Staff").getDataRange().getValues().slice(1);
+  const timeZone = ss.getSpreadsheetTimeZone(); // 自動適應溫尼伯時區
 
-  const startTimeStr = "10:00"; // 假設營業開始時間
-  const endTimeStr = "20:00";   // 假設營業結束時間
+  // 效能優化：一次性抓取所有按摩師當天行程
+  const dayStart = new Date(dateStr.replace(/-/g, "/") + " 00:00:00");
+  const dayEnd = new Date(dateStr.replace(/-/g, "/") + " 23:59:59");
+  const allStaffCals = staffData.map(row => ({
+    name: row[0],
+    events: CalendarApp.getCalendarById(row[1]) ? CalendarApp.getCalendarById(row[1]).getEvents(dayStart, dayEnd) : []
+  }));
+
+  let currentPos = new Date(dateStr.replace(/-/g, "/") + " " + startTimeStr);
+  const endLimit = new Date(dateStr.replace(/-/g, "/") + " " + endTimeStr);
   const slots = [];
-  
-  // 3. 模擬時間軸，以 30 分鐘為一格進行掃描
-  let currentPos = new Date(dateStr + "T" + startTimeStr);
-  const endOfDay = new Date(dateStr + "T" + endTimeStr);
 
-  while (currentPos.getTime() + (duration * 60000) <= endOfDay.getTime()) {
+  while (currentPos.getTime() + (duration * 60000) <= endLimit.getTime()) {
     const slotStart = new Date(currentPos);
-    const slotEnd = new Date(slotStart.getTime() + (duration * 60000));
     const slotEndWithBuffer = new Date(slotStart.getTime() + (totalNeedMinutes * 60000));
+    
+    let availableStaff = [];
+    let busyBeds = 0;
 
-    let availableTherapists = [];
-    let busyBedsCount = 0;
+    allStaffCals.forEach(staff => {
+      if (targetTherapist !== "none" && targetTherapist !== staff.name) return;
 
-    // 檢查每位按摩師在該時段的狀態
-    staffData.forEach(row => {
-      const name = row[0];
-      const calId = row[1];
-      const cal = CalendarApp.getCalendarById(calId);
-      if (!cal) return;
+      const currentEvents = staff.events.filter(e => e.getStartTime() < slotEndWithBuffer && e.getEndTime() > slotStart);
+      const isWorking = currentEvents.some(e => e.getTitle().includes("上班") && e.getStartTime() <= slotStart && e.getEndTime() >= slotEndWithBuffer);
+      const hasBooking = currentEvents.some(e => !e.getTitle().includes("上班"));
 
-      const events = cal.getEvents(slotStart, slotEndWithBuffer);
-      
-      // 判定邏輯：
-      // A. 是否有「上班」事件覆蓋整個時段
-      const isWorking = events.some(e => e.getTitle().includes("上班") && e.getStartTime() <= slotStart && e.getEndTime() >= slotEndWithBuffer);
-      
-      // B. 是否有其他「預約」事件衝突
-      const hasBooking = events.some(e => !e.getTitle().includes("上班"));
-
-      if (hasBooking) {
-        busyBedsCount++; // 只要該按摩師有預約，就佔用一張床
-      }
-
-      if (isWorking && !hasBooking) {
-        availableTherapists.push(name); // 沒預約且在上班的人才是「可選」
-      }
+      if (hasBooking) busyBeds++;
+      if (isWorking && !hasBooking) availableStaff.push(staff.name);
     });
 
-    // 4. 床位與人頭判定
-    // 條件：床位沒滿 (busyBeds < 2) 且 (若是指定人則該人要有空，若不指定則至少一人要有空)
-    const bedAvailable = busyBedsCount < maxBeds;
-    let canBook = false;
-
-    if (bedAvailable) {
-      if (targetTherapist === "none") {
-        canBook = availableTherapists.length > 0;
-      } else {
-        canBook = availableTherapists.includes(targetTherapist);
-      }
+    if (busyBeds < maxBeds && availableStaff.length > 0) {
+      slots.push(Utilities.formatDate(slotStart, timeZone, "HH:mm"));
     }
-
-    if (canBook) {
-      slots.push(Utilities.formatDate(slotStart, "GMT+8", "HH:mm"));
-    }
-
-    // 移動到下一個時段 (每 30 分鐘一跳)
     currentPos.setMinutes(currentPos.getMinutes() + 30);
   }
-
   return slots;
 }
 
-function processBooking(data) {
+/**
+ * 3. 驗證與常客邏輯
+ */
+function sendVerificationCode(email, name) {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  PropertiesService.getScriptProperties().setProperty('VERIFY_' + email, code);
+  const body = `親愛的 ${name} 您好：\n\n您的預約驗證碼為：${code}\n請於網頁輸入此代碼以完成操作。`;
+  MailApp.sendEmail(email, "預約系統驗證碼", body);
+  return "驗證碼已寄出";
+}
+
+function verifyCodeServerSide(email, inputCode) {
+  const saved = PropertiesService.getScriptProperties().getProperty('VERIFY_' + email);
+  return inputCode === saved;
+}
+
+function checkRegularCustomer(email, phone) {
+  const data = SpreadsheetApp.openById(SS_ID).getSheetByName("Bookings").getDataRange().getValues();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Bookings");
+  // 檢查是否有 姓名+Email 且狀態為「正常」的紀錄
+  const isRegular = data.some(row => row[7] === phone && row[3] === email && row[4] === "正常");
+  return { isRegular: isRegular };
+}
+
+/**
+ * 3.1 檢查修改次數 (用於修改流程)
+ */
+function checkEditLimit(bookingId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Bookings");
+  const data = sheet.getDataRange().getValues();
+  const row = data.find(r => r[0] === bookingId);
+  
+  // 假設第 13 欄 (索引 12) 是修改次數
+  const editCount = row[12] || 0;
+  return editCount < 1; // 只能修改一次
+}
+/**
+ * 4. 提交與修改邏輯
+ */
+function processBooking(data) {
+  const ss = SpreadsheetApp.openById(SS_ID);
   const bookingSheet = ss.getSheetByName("Bookings");
   const staffSheet = ss.getSheetByName("Staff");
   
   let finalTherapist = data.therapist;
+  const staffRows = staffSheet.getDataRange().getValues();
 
-  // 1. 如果是不指定，執行負載平衡分派
   if (finalTherapist === "none") {
-    const staffList = staffSheet.getDataRange().getValues().slice(1).map(r => r[0]);
-    // 簡單邏輯：計算今日每位師傅已有幾張單
-    const todayBookings = bookingSheet.getDataRange().getValues()
-      .filter(r => r[7] === data.date && r[10] !== "已取消");
-    
-    let minCount = Infinity;
-    staffList.forEach(name => {
-      const count = todayBookings.filter(r => r[5] === name).length;
-      if (count < minCount) {
-        minCount = count;
-        finalTherapist = name;
-      }
-    });
+    const therapists = staffRows.slice(1).map(r => r[0]);
+    const todayBookings = bookingSheet.getDataRange().getValues().filter(r => r[7] === data.date && r[10] !== "已取消");
+    finalTherapist = therapists.sort((a,b) => todayBookings.filter(r => r[5] === a).length - todayBookings.filter(r => r[5] === b).length)[0];
   }
 
-  // 2. 寫入 Google Calendar
-  const therapistId = staffSheet.getDataRange().getValues().find(r => r[0] === finalTherapist)[1];
-  const cal = CalendarApp.getCalendarById(therapistId);
-  const start = new Date(data.date + "T" + data.time);
-  // 取得服務時長
-  const services = ss.getSheetByName("Services").getDataRange().getValues();
-  const duration = services.find(r => r[0] === data.service)[1];
-  const end = new Date(start.getTime() + (duration * 60000));
-  
-  const event = cal.createEvent(`[預約] ${data.name} - ${data.service}`, start, end, {
-    description: `電話: ${data.phone}\n備註: ${data.note}`
-  });
+  const calId = staffRows.find(r => r[0] === finalTherapist)[1];
+  const service = ss.getSheetByName("Services").getDataRange().getValues().find(r => r[0] === data.service);
+  const start = new Date(data.date.replace(/-/g, "/") + " " + data.time);
+  const end = new Date(start.getTime() + (service[1] * 60000));
 
-  // 3. 寫入 Sheet 資料庫
+  const event = CalendarApp.getCalendarById(calId).createEvent(`[預約] ${data.name} - ${data.service}`, start, end, {description: `電話: ${data.phone}\n備註: ${data.note}`});
+
   bookingSheet.appendRow([
-    "ID-" + new Date().getTime(), // 預約 ID
-    new Date(),                   // 提交時間
-    data.name,
-    data.phone,
-    data.email,
-    finalTherapist,
-    data.service,
-    data.date,
-    data.time,
-    Utilities.formatDate(end, "GMT+8", "HH:mm"),
-    "正常",
-    event.getId()                 // 存下 Event ID 供未來修改/取消
+    "ID-" + new Date().getTime(), new Date(), data.name, data.phone, data.email, 
+    finalTherapist, data.service, data.date, data.time, Utilities.formatDate(end, ss.getSpreadsheetTimeZone(), "HH:mm"),
+    "正常", event.getId(), 0 // 修改次數初始化為 0
   ]);
 
-  // 4. 發送 Email 通知
-  MailApp.sendEmail({
-    to: data.email,
-    subject: "按摩預約確認通知",
-    body: `親愛的 ${data.name} 您好：\n\n您的預約已完成！\n日期：${data.date}\n時間：${data.time}\n項目：${data.service}\n按摩師：${finalTherapist}\n\n期待您的光臨。`
+  MailApp.sendEmail(data.email, "預約成功通知", `您已預約成功！\n日期：${data.date}\n時間：${data.time}\n師傅：${finalTherapist}`);
+  return { success: true };
+}
+
+/**
+ * 搜尋預約資料：支援回傳多筆紀錄 (處理夫妻/同行者情境)，搜尋預約資料：增加錯誤捕捉與 null 值保護
+ */
+// 核心：搜尋預約 (增加強效比對)
+function searchBookingForEdit(phoneDigits) {
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const sheet = ss.getSheetByName("Bookings");
+    if (!sheet) return { success: false, msg: "系統錯誤：找不到名為 'Bookings' 的工作表。" };
+
+    const data = sheet.getDataRange().getValues();
+    const searchClean = String(phoneDigits).replace(/\D/g, "").trim();
+    
+    // 過濾資料
+    const results = data.slice(1).filter(row => {
+      if (!row[3]) return false;
+      const sheetPhone = String(row[3]).replace(/\D/g, "").trim();
+      const sheetStatus = String(row[10] || "").trim();
+      return sheetPhone === searchClean && sheetStatus === "正常";
+    }).map(row => ({
+      bookingId: row[0],
+      name: row[2],
+      service: row[6],
+      date: row[7] instanceof Date ? Utilities.formatDate(row[7], ss.getSpreadsheetTimeZone(), "yyyy-MM-dd") : String(row[7]),
+      time: row[8],
+      email: row[4],
+      phone: row[3],
+      editCount: parseInt(row[12]) || 0
+    }));
+
+    if (results.length === 0) {
+      return { success: false, msg: "查無此電話(" + searchClean + ")的預約紀錄。" };
+    }
+
+    return { success: true, bookings: results, maskedEmail: results[0].email.replace(/(.{2})(.*)(?=@)/, (g1, g2, g3) => g2 + "*".repeat(g3.length)), fullEmail: results[0].email, name: results[0].name };
+
+  } catch (e) {
+    // 萬一出錯，強制回傳一個物件，防止前端接到 null
+    return { success: false, msg: "程式執行出錯，請致電工作室：" + e.message };
+  }
+}
+
+
+/**同步更新google 日曆 */
+function updateBooking(payload) {
+  try {
+    const ss = SpreadsheetApp.openById(SS_ID);
+    const sheet = ss.getSheetByName("Bookings");
+    const data = sheet.getDataRange().getValues();
+    const rowIndex = data.findIndex(r => r[0] === payload.bookingId);
+    
+    if (rowIndex === -1) return { success: false, message: "找不到紀錄" };
+
+    const oldEventId = data[rowIndex][11]; // 取得原本的 Calendar Event ID
+    const currentCount = parseInt(data[rowIndex][12] || 0);
+    const timeZone = ss.getSpreadsheetTimeZone();
+
+    // 1. 更新試算表資料 (師傅, 項目, 日期, 時間)
+    // 注意：這裡假設 Service 執行時間沒變，若需考慮不同 Service 需另取 duration
+    sheet.getRange(rowIndex + 1, 6, 1, 4).setValues([[payload.therapist, payload.service, payload.date, payload.time]]);
+    sheet.getRange(rowIndex + 1, 13).setValue(currentCount + 1); // 修改次數 +1
+
+    // 2. 更新 Google 日曆 (連動修正)
+    const staffSheet = ss.getSheetByName("Staff");
+    const staffRows = staffSheet.getDataRange().getValues();
+    const calId = staffRows.find(r => r[0] === payload.therapist)[1];
+    
+    if (calId && oldEventId) {
+      const calendar = CalendarApp.getCalendarById(calId);
+      const event = calendar.getEventById(oldEventId);
+      if (event) {
+        // 重新計算結束時間
+        const serviceData = ss.getSheetByName("Services").getDataRange().getValues().find(r => r[0] === payload.service);
+        const duration = serviceData ? parseInt(serviceData[1]) : 60;
+        const newStart = new Date(payload.date.replace(/-/g, "/") + " " + payload.time);
+        const newEnd = new Date(newStart.getTime() + (duration * 60000));
+        
+        event.setTitle(`[修改] ${payload.name} - ${payload.service}`);
+        event.setTime(newStart, newEnd);
+      }
+    }
+    
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: "更新失敗: " + e.message };
+  }
+}
+
+/**
+ * 5. 每月自動維護
+ */
+function monthlyMaintenance() {
+  const props = PropertiesService.getScriptProperties();
+  props.getKeys().filter(k => k.startsWith('VERIFY_')).forEach(k => props.deleteProperty(k));
+  
+  const ss = SpreadsheetApp.openById(SS_ID);
+  const source = ss.getSheetByName("Bookings");
+  const archive = ss.getSheetByName("Archive") || ss.insertSheet("Archive");
+  const data = source.getDataRange().getValues();
+  const today = new Date(); 
+  today.setHours(0,0,0,0);
+
+  const toKeep = [data[0]], toArchive = [];
+
+  data.slice(1).forEach(row => {
+    if (new Date(row[7]) < today) {
+      toArchive.push(row);
+    } else {
+      toKeep.push(row);
+    }
   });
 
-  return { message: "預約成功！確認信已寄出。" };
+  if (toArchive.length > 0) {
+    if (archive.getLastRow() === 0) {
+      archive.appendRow(data[0]);
+    }
+
+    archive
+      .getRange(archive.getLastRow() + 1, 1, toArchive.length, toArchive[0].length)
+      .setValues(toArchive);
+
+    source.clear();
+    source
+      .getRange(1, 1, toKeep.length, toKeep[0].length)
+      .setValues(toKeep);
+  }
 }
